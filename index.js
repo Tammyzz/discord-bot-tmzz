@@ -11,14 +11,26 @@ app.listen(process.env.PORT, () => {
 
 const { Client, GatewayIntentBits } = require('discord.js');
 
+console.log("Bắt đầu tạo client...");
+
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds],
 });
 
-client.once('ready', () => {
-  console.log(`Bot đã online: ${client.user.tag}`);
+client.on("ready", () => {
+  console.log("ĐÃ CONNECT DISCORD:", client.user.tag);
 });
+
+client.on("error", (err) => {
+  console.error("Client error:", err);
+});
+
+client.on("shardError", (err) => {
+  console.error("Shard error:", err);
+});
+
+console.log("Đang login...");
 
 client.login(process.env.TOKEN)
-  .then(() => console.log("Đang login vào Discord..."))
-  .catch(err => console.error("Lỗi login:", err));
+  .then(() => console.log("Login promise resolved"))
+  .catch((err) => console.error("Login failed:", err));
