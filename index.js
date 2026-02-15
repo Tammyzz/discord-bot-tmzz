@@ -22,7 +22,7 @@ client.once('ready', () => {
 });
 
 client.on('error', console.error);
-
+console.log("TOKEN =", process.env.TOKEN);
 client.login(process.env.TOKEN)
   .then(() => console.log("Đang login vào Discord..."))
   .catch(err => console.error("Lỗi login:", err));
