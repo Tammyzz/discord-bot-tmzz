@@ -36,7 +36,7 @@ client.once(Events.ClientReady, () => {
 const commands = [
   new SlashCommandBuilder()
     .setName("36")
-    .setDescription("Menu thần thánh 😏")
+    .setDescription("Muốn hỏi cái giề?")
 ].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
