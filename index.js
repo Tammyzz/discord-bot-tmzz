@@ -92,6 +92,10 @@ client.on(Events.InteractionCreate, async interaction => {
     const choice = interaction.values[0];
     const username = interaction.user.username;
 
+    const selected = interaction.component.options.find(
+      o => o.value === choice
+    );
+
     let reply = "";
 
     switch (choice) {
@@ -102,11 +106,18 @@ client.on(Events.InteractionCreate, async interaction => {
 
       case "gay":
         try {
-          const member = await interaction.guild.members.fetch(interaction.user.id);
+          const member = interaction.member;
+
+          if (!member.manageable) {
+            reply = "Tao đụng không tới mày rồi 😭";
+            break;
+          }
+
           await member.setNickname("Chó Gay 😏");
           reply = "Xem lại nickname m xem 😏";
         } catch (err) {
-          reply = "Đcm đẳng cấp quá không đổi tên đc 😭";
+          console.error(err);
+          reply = "Lỗi mẹ gì đó rồi 💀";
         }
         break;
 
@@ -155,8 +166,12 @@ client.on(Events.InteractionCreate, async interaction => {
         break;
     }
 
-    await interaction.reply({ content: reply });
+    await interaction.update({
+      content: `📌 **${selected.label}**\n\n${reply}`,
+      components: []
+    });
   }
 });
 
 client.login(process.env.TOKEN);
+
