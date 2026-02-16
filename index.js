@@ -27,7 +27,7 @@ const client = new Client({
 
 let player;
 
-/* ================= REGISTER COMMAND ================= */
+/* ================= REGISTER GLOBAL COMMAND ================= */
 
 const commands = [
   new SlashCommandBuilder().setName("vc").setDescription("Vào voice"),
@@ -37,9 +37,7 @@ const commands = [
     .setName("pl")
     .setDescription("Phát nhạc")
     .addStringOption(opt =>
-      opt.setName("link")
-        .setDescription("Link YouTube")
-        .setRequired(true)
+      opt.setName("link").setDescription("Link YouTube").setRequired(true)
     ),
   new SlashCommandBuilder()
     .setName("36")
@@ -50,13 +48,10 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
   await rest.put(
-    Routes.applicationGuildCommands(
-      process.env.CLIENT_ID,
-      process.env.GUILD_ID
-    ),
+    Routes.applicationCommands(process.env.CLIENT_ID),
     { body: commands }
   );
-  console.log("Slash command đã đăng ký");
+  console.log("Đã đăng ký GLOBAL command");
 })();
 
 client.once("clientReady", () => {
@@ -65,7 +60,7 @@ client.once("clientReady", () => {
 
 /* ================= INTERACTION ================= */
 
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async (interaction) => {
 
   /* ===== SLASH ===== */
 
@@ -117,11 +112,11 @@ client.on("interactionCreate", async interaction => {
       });
 
       player.play(resource);
+
       return interaction.followUp("Đang phát 🔥");
     }
 
     if (interaction.commandName === "36") {
-
       const menu = new StringSelectMenuBuilder()
         .setCustomId("main_menu")
         .setPlaceholder("Chọn kiểu chơi")
@@ -137,16 +132,15 @@ client.on("interactionCreate", async interaction => {
     }
   }
 
-  /* ===== MENU ===== */
+  /* ================= MENU ================= */
 
   if (interaction.isStringSelectMenu()) {
 
-    /* MAIN MENU */
+    /* MAIN */
 
     if (interaction.customId === "main_menu") {
 
       if (interaction.values[0] === "action") {
-
         const menu = new StringSelectMenuBuilder()
           .setCustomId("action_menu")
           .setPlaceholder("Chọn hành động")
@@ -171,7 +165,6 @@ client.on("interactionCreate", async interaction => {
       }
 
       if (interaction.values[0] === "question") {
-
         const menu = new StringSelectMenuBuilder()
           .setCustomId("question_menu")
           .setPlaceholder("Chọn câu hỏi")
@@ -197,77 +190,79 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "action_menu") {
 
       const member = interaction.member;
+      const selected = interaction.values[0];
 
       const safeNick = async (user, name) => {
         try {
           await user.setNickname(name);
+          return true;
         } catch {
-          return interaction.reply("Định đổi tên mày nhưng mày đẳng cấp quá 🥱");
+          await interaction.reply("Định đổi tên mày nhưng mày đẳng cấp quá 🥱");
+          return false;
         }
       };
 
-      switch (interaction.values[0]) {
+      switch (selected) {
 
         case "surprise":
-          return safeNick(member, "Bất ngờ") || interaction.reply("Xong 😎");
+          if (await safeNick(member, "Bất ngờ"))
+            return interaction.reply("⚡ Hành động:\n> Làm tao bất ngờ đi");
+          break;
 
         case "mutevb":
           const vb = await interaction.guild.members.fetch("1286550273006895177");
           await vb.timeout(60_000);
-          return interaction.reply("Ok luôn");
+          return interaction.reply("⚡ Hành động:\n> Mute thằng Vũ Bảo\n\nOk luôn");
 
         case "redkiki":
           return interaction.reply({
-            content: "Ko đc r m ơi thằng bò hung dữ quá",
+            content: "⚡ Hành động:\n> Đánh thằng Redkiki cho tao\n\nKo đc r m ơi thằng bò hung dữ quá",
             files: ["https://pbs.twimg.com/media/CNM42XjUkAApgrx.jpg"],
           });
 
         case "anime":
-          return interaction.reply(
-`Đây là top 10 hentai được đánh giá cao nhất theo MyAnimeList
-10. Kuroinu: Kedakaki Seijo wa Hakudaku ni Somaru
-9. Kanojo x Kanojo x Kanojo
-8. Seikatsu Shuukan the Animation
-7. Koiito Kenenbi the Animation
-6. Swing Out Sisters (2014)
-5. Oni ChiChi: Reborn
-4. Eroge! H mo Game mo Kaihatsu Zanmai
-3. Rance 01: Hikari wo Motomete The Animation
-2. Mankitsu Happening
-1. Master Piece the Animation`);
+          return interaction.reply("⚡ Hành động:\n> Tìm tao mấy bộ anime hay đi cu\n\n(Top 10 hentai theo MyAnimeList...)");
 
         case "dirty":
           const role = interaction.guild.roles.cache.find(r => r.name === "NÔ LỆ");
           if (role) await member.roles.add(role);
-          return safeNick(member, "NÔ LỆ CỦA NGHUY") || interaction.reply("Xong 😏");
+          if (await safeNick(member, "NÔ LỆ CỦA NGHUY"))
+            return interaction.reply("⚡ Hành động:\n> Làm gì đó dirty với tao");
+          break;
 
         case "fight":
           return interaction.reply({
+            content: "⚡ Hành động:\n> Làm tí đường quyền xem nào\n\nHả?..um..Ok?",
             files: ["https://i.wahup.com/media/tmp_meme_images/85cd99b5-e0a5-403a-aff8-f056d6f04b0d.png"],
           });
 
         case "bigass":
           return interaction.reply({
+            content: "⚡ Hành động:\n> Give me a pic of your big ass",
             files: ["https://furrycdn.org/img/2023/5/4/240212/large.png"],
           });
 
         case "renameLHuy":
           const lhuy = await interaction.guild.members.fetch("813707010129920040");
-          return safeNick(lhuy, "KhiemMocCu") || interaction.reply("Xong 😎");
+          if (await safeNick(lhuy, "KhiemMocCu"))
+            return interaction.reply("⚡ Hành động:\n> Đổi tên LHuy thành KhiemMocCu");
+          break;
 
         case "sunguyen":
           return interaction.reply({
+            content: "⚡ Hành động:\n> Cho t một tấm ảnh của Sử Ngu yên",
             files: ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS8FYaZxZAE1l_lQShMVI2G33j-jYuIQTs0vg&s"],
           });
 
         case "vubao":
           return interaction.reply({
+            content: "⚡ Hành động:\n> Cho t một tấm ảnh của Vũ Bảo",
             files: ["https://media.tenor.com/6ywOzKRf_IwAAAAM/patrick-star.gif"],
           });
 
         case "nhay":
           return interaction.reply({
-            content: "Hả?..um..Ok?",
+            content: "⚡ Hành động:\n> Nhảy đi\n\nHả?..um..Ok?",
             files: ["https://media.tenor.com/4HkLW40pwKgAAAAm/patrick-patrick-star.webp"],
           });
       }
@@ -278,45 +273,36 @@ client.on("interactionCreate", async interaction => {
     if (interaction.customId === "question_menu") {
 
       const member = interaction.member;
+      const selected = interaction.values[0];
 
-      switch (interaction.values[0]) {
+      switch (selected) {
 
         case "gay":
-          try {
-            await member.setNickname("TAO BỊ GAY");
-          } catch {
-            return interaction.reply("Định đổi tên mày nhưng mày đẳng cấp quá 🥱");
-          }
-          return interaction.reply("Xem lại tên m xem ai mới là thằng gay 😏");
+          try { await member.setNickname("TAO BỊ GAY"); }
+          catch { return interaction.reply("Định đổi tên mày nhưng mày đẳng cấp quá 🥱"); }
+
+          return interaction.reply("❓ Câu hỏi:\n> Mày bị gay à?\n\nXem lại tên m xem ai mới là thằng gay 😏");
 
         case "aigay":
-          return interaction.reply(`${member.user.username} 😏`);
+          return interaction.reply(`❓ Câu hỏi:\n> Ai gay nhất sever?\n\n${member.user.username} 😏`);
 
         case "depzai":
-          return interaction.reply("Tao, thích ý kiến ko? 😎");
+          return interaction.reply("❓ Câu hỏi:\n> Ai đẹp zai nhất sever?\n\nTao, thích ý kiến ko? 😎");
 
         case "luat":
-          return interaction.reply("Ổ Quỷ thì làm đéo j có luật 😏");
+          return interaction.reply("❓ Câu hỏi:\n> Luật Sever\n\nỔ Quỷ thì làm đéo j có luật 😏");
 
         case "log":
-          return interaction.reply(
-`Đĩ,Quy tắc công thức Logarit của 1 tích: log_α (ab) = log_αb + log_αc
+          return interaction.reply("❓ Câu hỏi:\n> Quy tắc Logarit của 1 tích là gì\n\nlog_α (ab) = log_αb + log_αc ...");
 
-Trong đó: a, b, c là số dương, a # 1
-
-*Để sử dụng bảng Logarit cần đưa cơ số về Logarit thập phân cơ số a = 10
-*Logarit tự nhiên cơ số e (~2,781)
-*Logarit nhị phân cơ số 2
-*Dùng thang Logarit nếu muốn thu nhỏ phạm vi`);
-        
         case "alo":
           return interaction.reply({
-            content: "Nhầm số r anh ơi",
+            content: "❓ Câu hỏi:\n> Alo, Vũ à Vũ?\n\nNhầm số r anh ơi",
             files: ["https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS-MoxNym0w9EwK8DZZFkzgYlcm1iVyrE7A-A&s"],
           });
 
         case "love":
-          return interaction.reply("Duy Anh yêu tất cả mọi người <3");
+          return interaction.reply("❓ Câu hỏi:\n> M có yêu t ko\n\nDuy Anh yêu tất cả mọi người <3");
       }
     }
   }
