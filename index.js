@@ -15,19 +15,22 @@ import {
 import {
   joinVoiceChannel,
   createAudioPlayer,
-  createAudioResource
+  createAudioResource,
+  entersState,
+  VoiceConnectionStatus,
+  AudioPlayerStatus
 } from "@discordjs/voice";
 
 import play from "play-dl";
 
 dotenv.config();
 
-/* ================= WEB SERVER (CHO RAILWAY KHỎI NGỦ) ================= */
+/* ================= WEB SERVER ================= */
 const app = express();
 app.get("/", (req, res) => res.send("Bot đang sống 😎"));
 app.listen(process.env.PORT || 3000);
 
-/* ================= DISCORD CLIENT ================= */
+/* ================= CLIENT ================= */
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -41,7 +44,35 @@ let connection;
 let player = createAudioPlayer();
 let stay247 = false;
 
+/* ================= VOICE SAFE HANDLER ================= */
+
+function connectToChannel(channel) {
+  connection = joinVoiceChannel({
+    channelId: channel.id,
+    guildId: channel.guild.id,
+    adapterCreator: channel.guild.voiceAdapterCreator,
+    selfDeaf: true
+  });
+
+  connection.on("stateChange", async (oldState, newState) => {
+    if (newState.status === VoiceConnectionStatus.Disconnected) {
+      try {
+        await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Signalling, 5000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 5000)
+        ]);
+      } catch {
+        connection.destroy();
+        connection = null;
+      }
+    }
+  });
+
+  connection.subscribe(player);
+}
+
 /* ================= SLASH COMMAND ================= */
+
 const commands = [
   new SlashCommandBuilder().setName("36").setDescription("Menu 36"),
   new SlashCommandBuilder().setName("join").setDescription("Join voice"),
@@ -62,183 +93,68 @@ await rest.put(
 );
 
 /* ================= INTERACTION ================= */
+
 client.on(Events.InteractionCreate, async interaction => {
 
-  /* ===== SLASH COMMAND ===== */
-  if (interaction.isChatInputCommand()) {
+  if (!interaction.isChatInputCommand()) return;
 
-    if (interaction.commandName === "36") {
+  const channel = interaction.member.voice.channel;
 
-      const actionMenu = new StringSelectMenuBuilder()
-        .setCustomId("action_menu")
-        .setPlaceholder("Giúp tao cái này")
-        .addOptions([
-          { label: "Làm tao bất ngờ đi", value: "batngo" },
-          { label: "Mute thằng Vũ Bảo", value: "mutevb" },
-          { label: "Đánh thằng Redkiki cho tao", value: "redkiki" },
-          { label: "Tìm tao mấy bộ anime hay đi cu", value: "anime" },
-          { label: "Làm gì đó dirty với tao", value: "dirty" },
-          { label: "Làm tí đường quyền xem nào", value: "duongquyen" },
-          { label: "Give me a pic of your big ass", value: "bigass" },
-          { label: "Đổi tên LHuy thành KhiemMocCu", value: "doilhuy" },
-          { label: "Cho t một tấm ảnh của Sử Ngu yên", value: "sungu" },
-          { label: "Cho t một tấm ảnh của Vũ Bảo", value: "vubao" },
-          { label: "Nhảy đi", value: "nhay" }
-        ]);
+  /* ===== JOIN ===== */
+  if (interaction.commandName === "join") {
 
-      const questionMenu = new StringSelectMenuBuilder()
-        .setCustomId("question_menu")
-        .setPlaceholder("Cho hỏi cái")
-        .addOptions([
-          { label: "Mày bị gay à?", value: "gay" },
-          { label: "Ai gay nhất sever?", value: "aigay" },
-          { label: "Ai đẹp zai nhất sever?", value: "depzai" },
-          { label: "Luật Sever", value: "luat" },
-          { label: "Quy tắc Logarit của 1 tích là gì", value: "log" },
-          { label: "Alo, Vũ à Vũ?", value: "alo" },
-          { label: "M có yêu t ko", value: "yeu" }
-        ]);
+    if (!channel) return interaction.reply("Vào voice trước đi 🥱");
 
-      await interaction.reply({
-        content: "Chọn đi 😏",
-        components: [
-          new ActionRowBuilder().addComponents(actionMenu),
-          new ActionRowBuilder().addComponents(questionMenu)
-        ]
-      });
-    }
+    connectToChannel(channel);
+    return interaction.reply("Đã vào voice 😎");
+  }
 
-    /* ===== JOIN ===== */
-    if (interaction.commandName === "join") {
-      const channel = interaction.member.voice.channel;
-      if (!channel) return interaction.reply("Vào voice trước đi 🥱");
+  /* ===== PLAY ===== */
+  if (interaction.commandName === "play") {
 
-      connection = joinVoiceChannel({
-        channelId: channel.id,
-        guildId: channel.guild.id,
-        adapterCreator: channel.guild.voiceAdapterCreator
-      });
+    const link = interaction.options.getString("link");
 
-      interaction.reply("Đã vào voice 😎");
-    }
+    if (!channel)
+      return interaction.reply("Vào voice trước đi 🥱");
 
-    /* ===== PLAY ===== */
-    if (interaction.commandName === "play") {
-      const link = interaction.options.getString("link");
-      if (!connection) return interaction.reply("Bot chưa vào voice 🥱");
+    if (!connection)
+      connectToChannel(channel);
 
-      const stream = await play.stream(link);
-      const resource = createAudioResource(stream.stream, {
-        inputType: stream.type
-      });
+    const stream = await play.stream(link);
+    const resource = createAudioResource(stream.stream, {
+      inputType: stream.type
+    });
 
-      player.play(resource);
-      connection.subscribe(player);
+    player.play(resource);
+    connection.subscribe(player);
 
-      interaction.reply(`Đang phát: ${link}`);
-    }
-
-    /* ===== DISCONNECT ===== */
-    if (interaction.commandName === "disconnect") {
-      if (connection) {
+    player.on(AudioPlayerStatus.Idle, () => {
+      if (!stay247) {
         connection.destroy();
         connection = null;
-        stay247 = false;
-        interaction.reply("Đã cút khỏi voice 🥱");
       }
-    }
+    });
 
-    /* ===== 247 ===== */
-    if (interaction.commandName === "247") {
-      stay247 = !stay247;
-      interaction.reply(`247 mode: ${stay247 ? "ON" : "OFF"}`);
-    }
+    return interaction.reply(`Đang phát: ${link}`);
   }
 
-  /* ===== MENU HANDLE ===== */
-  if (interaction.isStringSelectMenu()) {
-    const member = interaction.member;
-
-    try {
-      switch (interaction.values[0]) {
-
-        case "batngo":
-          await member.setNickname("Bất ngờ");
-          return interaction.reply("Done 😏");
-
-        case "mutevb":
-          const vb = await interaction.guild.members.fetch("1286550273006895177");
-          await vb.voice.setMute(true);
-          return interaction.reply("Ok luôn 😏");
-
-        case "redkiki":
-          return interaction.reply({
-            content: "Ko đc r m ơi thằng bò hung dữ quá",
-            files: ["https://pbs.twimg.com/media/CNM42XjUkAApgrx.jpg"]
-          });
-
-        case "anime":
-          return interaction.reply("https://hentaivc.pro/top-yeu-thich/");
-
-        case "dirty":
-          const role = interaction.guild.roles.cache.find(r => r.name === "NÔ LỆ");
-          if (role) await member.roles.add(role);
-          await member.setNickname("NÔ LỆ CỦA NGHUY");
-          return interaction.reply("Xong 😏");
-
-        case "duongquyen":
-          return interaction.reply("https://i.wahup.com/media/tmp_meme_images/85cd99b5-e0a5-403a-aff8-f056d6f04b0d.png");
-
-        case "bigass":
-          return interaction.reply("https://furrycdn.org/img/2023/5/4/240212/large.png");
-
-        case "doilhuy":
-          const lhuy = await interaction.guild.members.fetch("813707010129920040");
-          await lhuy.setNickname("KhiemMocCu");
-          return interaction.reply("Đã đổi 😏");
-
-        case "sungu":
-          return interaction.reply("https://media.tenor.com/p7ZA5XsSE7IAAAAM/bamboozled-astonished.gif");
-
-        case "vubao":
-          return interaction.reply("https://media.tenor.com/6ywOzKRf_IwAAAAM/patrick-star.gif");
-
-        case "nhay":
-          return interaction.reply({
-            content: "Hả?..um..Ok?",
-            files: ["https://media.tenor.com/4HkLW40pwKgAAAAm/patrick-patrick-star.webp"]
-          });
-
-        case "gay":
-          await member.setNickname("TAO BỊ GAY");
-          return interaction.reply("Xem lại tên m xem ai mới là thằng gay 😏");
-
-        case "aigay":
-          return interaction.reply(`${member.user.username} 😏`);
-
-        case "depzai":
-          return interaction.reply("Tao, thích ý kiến ko? 😎");
-
-        case "luat":
-          return interaction.reply("Ổ Quỷ thì làm đéo j có luật 😏");
-
-        case "log":
-          return interaction.reply("log_α(ab) = log_αa + log_αb");
-
-        case "alo":
-          return interaction.reply({
-            content: "Nhầm số r anh ơi",
-            files: ["https://cdn.24h.com.vn/upload/2-2023/images/2023-04-02/1680403207-nam-streamer-do-mixi-giau-co-nao-hinh-3-width600height400.jpeg"]
-          });
-
-        case "yeu":
-          return interaction.reply("Duy Anh yêu tất cả mọi người.. https://media.tenor.com/-Udld9YEr0EAAAAM/sonic-zesty.gif");
-      }
-
-    } catch (err) {
-      return interaction.reply("Định đổi tên mày nhưng mày đẳng cấp quá 🥱");
+  /* ===== DISCONNECT ===== */
+  if (interaction.commandName === "disconnect") {
+    if (connection) {
+      connection.destroy();
+      connection = null;
     }
+    stay247 = false;
+    return interaction.reply("Đã cút khỏi voice 🥱");
   }
+
+  /* ===== 247 ===== */
+  if (interaction.commandName === "247") {
+    stay247 = !stay247;
+    return interaction.reply(`247 mode: ${stay247 ? "ON 🔥" : "OFF"}`);
+  }
+
 });
 
+/* ================= LOGIN ================= */
 client.login(process.env.TOKEN);
