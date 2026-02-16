@@ -173,7 +173,7 @@ client.on(Events.InteractionCreate, async interaction => {
     const newRow = new ActionRowBuilder().addComponents(newMenu);
 
     await interaction.update({
-      content: `🗣️ : **${selected.label}**\n\n${reply}`,
+      content: `**Đã trả lời câu hỏi của bạn:** ${selected.label}\n\n${reply}`,
       components: [newRow]
     });
   }
