@@ -1,183 +1,242 @@
+require("dotenv").config();
 const {
   Client,
   GatewayIntentBits,
+  Partials,
   SlashCommandBuilder,
   Routes,
   REST,
   ActionRowBuilder,
   StringSelectMenuBuilder,
-  Events
+  PermissionFlagsBits,
 } = require("discord.js");
 
-const express = require("express");
+const {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource,
+  AudioPlayerStatus,
+  entersState,
+  VoiceConnectionStatus,
+} = require("@discordjs/voice");
+
+const play = require("play-dl");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
+  ],
 });
 
-// ===== WEB SERVER =====
-const app = express();
-app.get("/", (req, res) => {
-  res.send("Bot đang sống 😎");
-});
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Web server đang chạy");
-});
+let connection;
+let player;
+let stay247 = false;
 
-// ===== READY =====
-client.once(Events.ClientReady, () => {
-  console.log(`Bot đã online: ${client.user.tag}`);
+client.once("ready", () => {
+  console.log("Bot đã online");
 });
 
-// ===== SLASH COMMAND =====
-const commands = [
-  new SlashCommandBuilder()
-    .setName("36")
-    .setDescription("Muốn hỏi cái giề?")
-].map(cmd => cmd.toJSON());
+client.on("interactionCreate", async (interaction) => {
+  if (interaction.isChatInputCommand()) {
+    // ===== /36 =====
+    if (interaction.commandName === "36") {
+      const sub = interaction.options.getSubcommand(false);
 
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+      // /36 vc
+      if (sub === "vc") {
+        const channel = interaction.member.voice.channel;
+        if (!channel)
+          return interaction.reply({ content: "Vào voice đi đã 😏", ephemeral: true });
 
-(async () => {
-  try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("Đăng ký lệnh thành công!");
-  } catch (err) {
-    console.error(err);
-  }
-})();
+        connection = joinVoiceChannel({
+          channelId: channel.id,
+          guildId: channel.guild.id,
+          adapterCreator: channel.guild.voiceAdapterCreator,
+        });
 
-// ===== HANDLE INTERACTION =====
-client.on(Events.InteractionCreate, async interaction => {
+        interaction.reply("Đã vào kênh thoại rồi đó 😎");
+      }
 
-  if (interaction.isChatInputCommand() && interaction.commandName === "36") {
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("menu_36")
-      .setPlaceholder("Muốn gì vậy cu eim?")
-      .addOptions([
-        { label: "Luật Sever", value: "luat" },
-        { label: "Mày bị gay à?", value: "gay" },
-        { label: "Send n#de for me plz?", value: "cute" },
-        { label: "Ai gay nhất sever?", value: "aigay" },
-        { label: "Ai đẹp zai nhất sever?", value: "depzai" },
-        { label: "khinh mấy thằng 36", value: "khinh" },
-        { label: "Alo, Vũ à Vũ?", value: "vu" },
-        { label: "Chỉ t cách rap battle đi cu", value: "rap" },
-        { label: "Cho t xem bộ mặt thật của Vũ bảo", value: "vu2" },
-        { label: "Cho t xem bộ mặt thật của Sử Nguy ên", value: "su" },
-        { label: "Bật Album Nổ của Wren Evans", value: "wren" },
-        { label: "Tao yêu mày", value: "love" },
-        { label: "Recomment game hay", value: "game" }
-      ]);
-
-    const row = new ActionRowBuilder().addComponents(menu);
-
-    await interaction.reply({
-      content: "Muốn gì vậy cu eim?",
-      components: [row]
-    });
-  }
-
-  if (interaction.isStringSelectMenu() && interaction.customId === "menu_36") {
-
-    const choice = interaction.values[0];
-    const username = interaction.user.username;
-
-    const selected = interaction.component.options.find(
-      o => o.value === choice
-    );
-
-    let reply = "";
-
-    switch (choice) {
-
-      case "luat":
-        reply = "Ổ Quỷ thì làm đéo j có luật 😏";
-        break;
-
-      case "gay":
-        try {
-          const member = interaction.member;
-
-          if (!member.manageable) {
-            reply = "Tao đụng không tới mày rồi 😭";
-            break;
-          }
-
-          await member.setNickname("Chó Gay 😏");
-          reply = "Xem lại nickname m xem 😏";
-        } catch (err) {
-          console.error(err);
-          reply = "Lỗi mẹ gì đó rồi 💀";
+      // /36 dc
+      else if (sub === "dc") {
+        if (connection) {
+          connection.destroy();
+          connection = null;
+          stay247 = false;
+          interaction.reply("Thoát voice rồi 👋");
+        } else {
+          interaction.reply("Có ở trong voice đâu mà thoát 😑");
         }
-        break;
+      }
 
-      case "cute":
-        reply = "😈 https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Who_is_the_Cutest%3F.jpg/500px-Who_is_the_Cutest%3F.jpg";
-        break;
+      // /36 247
+      else if (sub === "247") {
+        stay247 = true;
+        interaction.reply("Ok ở lì đây luôn 😎");
+      }
 
-      case "aigay":
-        reply = "Tao…";
-        break;
+      // /36 pl
+      else if (sub === "pl") {
+        const url = interaction.options.getString("link");
+        const channel = interaction.member.voice.channel;
+        if (!channel)
+          return interaction.reply("Vào voice trước đã 😐");
 
-      case "depzai":
-        reply = `Chắc là… ${username} 😉`;
-        break;
+        connection = joinVoiceChannel({
+          channelId: channel.id,
+          guildId: channel.guild.id,
+          adapterCreator: channel.guild.voiceAdapterCreator,
+        });
 
-      case "khinh":
-        reply = "Ê.. 🤨";
-        break;
+        player = createAudioPlayer();
+        connection.subscribe(player);
 
-      case "vu":
-        reply = "Vũ cái l#n má mày";
-        break;
+        const stream = await play.stream(url);
+        const resource = createAudioResource(stream.stream, {
+          inputType: stream.type,
+        });
 
-      case "rap":
-        reply = "Đây đây chỉ cho… Cái địt con mẹ m con chó Thiên Tâm t đéo làm gì m nha...";
-        break;
+        player.play(resource);
 
-      case "vu2":
-        reply = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRhJookOmhxlnp10GhpSrdRW21Xi7VoKzH9-A&s";
-        break;
+        interaction.reply(`Đang phát: ${url} 🔥`);
+      }
 
-      case "su":
-        reply = "https://palada.vn/wp-content/uploads/2023/10/an-ba-to-com.jpg";
-        break;
+      // /36 (không sub)
+      else {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId("main_menu")
+          .setPlaceholder("Chọn kiểu chơi")
+          .addOptions([
+            { label: "Giúp tao cái này", value: "action" },
+            { label: "Cho hỏi cái", value: "question" },
+          ]);
 
-      case "wren":
-        reply = "Suc vat ngoại tình, Ewww 😨";
-        break;
+        const row = new ActionRowBuilder().addComponents(menu);
 
-      case "love":
-        reply = "Tao cũng vậy <3";
-        break;
+        interaction.reply({
+          content: "Chọn loại trước đã 👀",
+          components: [row],
+        });
+      }
+    }
+  }
 
-      case "game":
-        reply = "https://store.steampowered.com/app/3855540/BLACK_SOULS_II/";
-        break;
+  // ===== MENU =====
+  if (interaction.isStringSelectMenu()) {
+    // MENU 1
+    if (interaction.customId === "main_menu") {
+      if (interaction.values[0] === "action") {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId("action_menu")
+          .setPlaceholder("Chọn hành động")
+          .addOptions([
+            { label: "Làm tao bất ngờ đi", value: "surprise" },
+            { label: "Mute thằng Vũ Bảo", value: "mutevb" },
+            { label: "Đánh thằng Redkiki cho tao", value: "redkiki" },
+            { label: "Tìm tao mấy bộ anime hay đi cu", value: "anime" },
+            { label: "Làm gì đó dirty với tao", value: "dirty" },
+            { label: "Làm tí đường quyền xem nào", value: "fight" },
+          ]);
+
+        return interaction.update({
+          content: "Chọn đi 😏",
+          components: [new ActionRowBuilder().addComponents(menu)],
+        });
+      }
+
+      if (interaction.values[0] === "question") {
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId("question_menu")
+          .setPlaceholder("Chọn câu hỏi")
+          .addOptions([
+            { label: "Mày bị gay à?", value: "gay" },
+            { label: "Ai gay nhất sever?", value: "aigay" },
+            { label: "Ai đẹp zai nhất sever?", value: "depzai" },
+            { label: "Luật Sever", value: "luat" },
+          ]);
+
+        return interaction.update({
+          content: "Hỏi gì hỏi đi 😌",
+          components: [new ActionRowBuilder().addComponents(menu)],
+        });
+      }
     }
 
-    // TẠO LẠI MENU ĐỂ MỞ TIẾP
-    const newMenu = new StringSelectMenuBuilder()
-      .setCustomId("menu_36")
-      .setPlaceholder("Muốn hỏi tiếp không?")
-      .addOptions(interaction.component.options);
+    // ===== ACTION HANDLE =====
+    if (interaction.customId === "action_menu") {
+      const member = interaction.member;
 
-    const newRow = new ActionRowBuilder().addComponents(newMenu);
+      switch (interaction.values[0]) {
+        case "surprise":
+          try {
+            await member.setNickname("Bất ngờ");
+            return interaction.reply("Đã trả lời câu hỏi của bạn");
+          } catch {
+            return interaction.reply(
+              "Định đổi tên mày nhưng mày đẳng cấp quá 🥱"
+            );
+          }
 
-    await interaction.update({
-      content: `**Đã trả lời câu hỏi của bạn:** ${selected.label}\n\n${reply}`,
-      components: [newRow]
-    });
+        case "mutevb":
+          const vb = await interaction.guild.members.fetch(
+            "1286550273006895177"
+          );
+          await vb.timeout(60_000);
+          return interaction.reply("Ok luôn");
+
+        case "redkiki":
+          return interaction.reply({
+            content: "Ko đc r m ơi thằng bò hung dữ quá",
+            files: ["https://pbs.twimg.com/media/CNM42XjUkAApgrx.jpg"],
+          });
+
+        case "anime":
+          return interaction.reply(
+            "https://hentaivc.pro/top-yeu-thich/"
+          );
+
+        case "dirty":
+          const role = interaction.guild.roles.cache.find(
+            (r) => r.name === "NÔ LỆ"
+          );
+          if (role) await member.roles.add(role);
+          await member.setNickname("NÔ LỆ CỦA NGHUY");
+          return interaction.reply("Xong 😏");
+
+        case "fight":
+          return interaction.reply({
+            content: "Hả?..um..Ok?",
+            files: [
+              "https://i.wahup.com/media/tmp_meme_images/85cd99b5-e0a5-403a-aff8-f056d6f04b0d.png",
+            ],
+          });
+      }
+    }
+
+    // ===== QUESTION HANDLE =====
+    if (interaction.customId === "question_menu") {
+      const member = interaction.member;
+
+      switch (interaction.values[0]) {
+        case "gay":
+          await member.setNickname("TAO BỊ GAY");
+          return interaction.reply(
+            "Xem lại tên m xem ai mới là thằng gay 😏"
+          );
+
+        case "aigay":
+          return interaction.reply(`${member.user.username} 😏`);
+
+        case "depzai":
+          return interaction.reply("Tao, thích ý kiến ko? 😎");
+
+        case "luat":
+          return interaction.reply("Ổ Quỷ thì làm đéo j có luật 😏");
+      }
+    }
   }
 });
 
 client.login(process.env.TOKEN);
-
